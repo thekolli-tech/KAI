@@ -13,7 +13,7 @@ export function Composer() {
         aria-describedby="composer-note"
       />
       <p id="composer-note" className="mt-2 text-xs text-muted-foreground">
-        The chat API is not connected. This field does not send a message.
+        This field does not send a message.
       </p>
     </div>
   );

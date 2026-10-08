@@ -56,9 +56,6 @@ def test_invalid_request_id_is_replaced() -> None:
     assert response.headers["x-request-id"] != "bad id\n"
 
 
-def test_chat_route_is_not_exposed() -> None:
-    client = _client()
-    assert client.post("/api/v1/chat").status_code == 404
-    schema = client.get("/api/v1/openapi.json").json()
-    assert "/api/v1/chat" not in schema["paths"]
+def test_health_route_stays_in_the_openapi_document() -> None:
+    schema = _client().get("/api/v1/openapi.json").json()
     assert "/api/v1/health" in schema["paths"]

@@ -247,12 +247,13 @@ def test_runtime_state_distinguishes_mock_from_an_empty_registry() -> None:
     assert model_runtime_state(build_provider_registry()) is CheckState.MOCK
 
 
-def test_app_registers_the_mock_router_and_does_not_expose_chat() -> None:
+def test_app_registers_the_mock_router() -> None:
     app = create_app()
     router = app.state.model_router
     assert isinstance(router, RegisteredModelRouter)
     client = TestClient(app)
-    assert client.post("/api/v1/chat").status_code == 404
+    refused = client.post("/api/v1/chat", json={"message": MESSAGE})
+    assert refused.status_code == 401
     composed = build_model_router()
     request = _request()
 

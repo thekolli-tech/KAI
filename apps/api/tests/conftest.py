@@ -11,6 +11,9 @@ _BLANK = {
     "MINIO_SECRET_KEY": "",
     "KAI_MODEL_PROVIDER": "unconfigured",
     "KAI_ENV": "development",
+    "KAI_LOCAL_BEARER_TOKEN": "",
+    "KAI_LOCAL_USER_ID": "",
+    "KAI_LOCAL_ORGANIZATION_ID": "",
 }
 
 

@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     minio_bucket: str = "kai-documents"
     minio_secure: bool = False
     kai_model_provider: str = "unconfigured"
+    kai_local_bearer_token: str = ""
+    kai_local_user_id: str = ""
+    kai_local_organization_id: str = ""
 
 
 @lru_cache

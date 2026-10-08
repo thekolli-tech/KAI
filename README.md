@@ -14,7 +14,7 @@ The model runtime registers `MockModelProvider`, a deterministic local stand-in 
 - `MockModelProvider` and `RegisteredModelRouter`, composed by the API and kept out of `kai_engine`
 - PostgreSQL schema and Docker Compose for PostgreSQL, Redis, Qdrant, and MinIO
 
-Health reports `model_runtime: mock`. The orchestrator is not mounted on a chat route. Chat, tool execution, agents, memory, document ingestion, and authentication do not have product implementations. The workspace does not pretend they do.
+Health reports `model_runtime: mock`. `POST /api/v1/chat` runs the orchestrator against that mock. The other stages are pass-throughs. Tool execution, agents, memory, document ingestion, and production authentication are not implemented. The workspace composer does not send messages.
 
 ## Layout
 
@@ -92,6 +92,10 @@ Python commands use `scripts/py`, which prefers `.venv`.
 
 `apps/api` builds a `ProviderRegistry` with `MockModelProvider` and passes it to `RegisteredModelRouter`. `KaiEngineOrchestrator` calls `select`, then `execute`, and passes that text to verification. Tests in `services/model-runtime/tests` and `apps/api/tests/test_model_path.py` cover the path without a network or a database.
 
+## Chat
+
+`POST /api/v1/chat` requires a bearer token. Outside production, `KAI_LOCAL_BEARER_TOKEN`, `KAI_LOCAL_USER_ID`, and `KAI_LOCAL_ORGANIZATION_ID` configure that token and the principal. The body is a message. The response message is the deterministic mock text. Production refuses the local token.
+
 ## Next step
 
-Phase 4 adds `POST /api/v1/chat` at the composition root, with the orchestrator and the mock router injected. The mock stays the only provider.
+Phase 5 adds `POST /api/v1/chat/stream` from `MockModelProvider.stream`. The mock stays the only provider.

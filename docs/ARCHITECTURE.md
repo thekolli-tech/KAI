@@ -12,7 +12,7 @@ User
   → models, tools, memory, documents, search
 ```
 
-Phase 1 shipped the web app, the API health check, and the contracts below. Phase 2 adds the orchestrator. Phase 3 registers a local mock model and calls it through `ModelRouter`. The API still does not expose a chat route.
+Phase 1 shipped the web app, the API health check, and the contracts below. Phase 2 adds the orchestrator. Phase 3 registers a local mock model. Phase 4 exposes that path at `POST /api/v1/chat`. The workspace composer still does not send messages.
 
 The API is a modular monolith. `services/*` are Python packages imported by that process. They are not separate network services. Split them only when a boundary has its own scaling or security reason.
 
@@ -155,10 +155,14 @@ Versioned routes that exist:
 
 - `GET /api/v1/health`
 - `GET /health` for a process probe
+- `POST /api/v1/chat`
+
+`POST /api/v1/chat` accepts `message` and optional `conversation_id`, `project_id`, and `attachment_ids`. It does not accept an organization id. `LocalDevelopmentAuthenticator` resolves the principal from server settings and only outside production. The route then calls `organization_boundary` and `KaiEngineOrchestrator.handle`. The HTTP body is the `EngineResponse`. Typed engine failures use `EngineError.to_public_dict()`. Any other exception is a generic 500 with no exception text.
+
+The stages beside the model router are pass-throughs in the API composition root. They do not classify, search, retrieve documents, execute tools, or write an agent reply. The response message is the mock provider's text. `MockModelProvider` remains the only provider.
 
 Routes that are specified for later phases and are intentionally absent:
 
-- `POST /api/v1/chat`
 - `POST /api/v1/chat/stream`
 - conversation CRUD
 - `POST /api/v1/files`
@@ -175,7 +179,7 @@ Secrets are environment variables. `.env.example` lists the names. The health pa
 
 Request ids are accepted only when they match a short token pattern. Anything else is replaced.
 
-Authentication is a port (`Authenticator`). It is not attached to a route. When it is attached, the principal's organization must come from a membership row on the server. A client-supplied organization header is not a source of identity.
+Authentication is a port (`Authenticator`). Chat attaches `LocalDevelopmentAuthenticator`, which reads a server-configured principal and is disabled in production. It is not a membership directory. A client-supplied organization header is not a source of identity.
 
 `organization_boundary` is the rule already implemented: a principal may act only in its own organization. Product routes must use it, or the later `Authorizer`, before they read tenant data.
 
@@ -212,6 +216,6 @@ model-runtime → its own provider, mock, and registry contracts
 
 `kai_engine` does not import the model runtime, tool, agent, memory, search, or document packages, and it does not import a web framework or a database client. The API constructs the registry and the router. It still does not mount the orchestrator on a chat route, because the other stages have no product implementations.
 
-## Phase 4
+## Phase 5
 
-Add `POST /api/v1/chat` at the composition root. Inject `KaiEngineOrchestrator` with `RegisteredModelRouter` and explicit stage implementations for the stages that are still doubles in tests. Return the engine response. Keep `MockModelProvider` as the only provider. Do not add a hosted model, and do not put provider construction inside `kai_engine`. Streaming SSE can follow that route once the mock text is returned on the request path.
+Add `POST /api/v1/chat/stream` that reads `MockModelProvider.stream` through the existing router boundary and emits SSE. Keep `MockModelProvider` as the only provider. Do not add a hosted model, and do not put provider construction inside `kai_engine`.
