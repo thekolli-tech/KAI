@@ -14,7 +14,7 @@ The model runtime registers `MockModelProvider`, a deterministic local stand-in 
 - `MockModelProvider` and `RegisteredModelRouter`, composed by the API and kept out of `kai_engine`
 - PostgreSQL schema and Docker Compose for PostgreSQL, Redis, Qdrant, and MinIO
 
-Health reports `model_runtime: mock`. `POST /api/v1/chat` runs the orchestrator against that mock. The other stages are pass-throughs. Tool execution, agents, memory, document ingestion, and production authentication are not implemented. The workspace composer does not send messages.
+Health reports `model_runtime: mock`. `POST /api/v1/chat` and `POST /api/v1/chat/stream` run the orchestrator against that mock. The workspace composer streams through a same-origin handler. The browser does not receive the local bearer token. The other stages are pass-throughs. Tool execution, agents, memory, document ingestion, and production authentication are not implemented. Transcripts are kept in the workspace process and are not written to PostgreSQL.
 
 ## Layout
 
@@ -98,8 +98,12 @@ Python commands use `scripts/py`, which prefers `.venv`.
 
 The JSON route returns the deterministic mock text. The stream route is `text/event-stream` and is not cached. Events are `run.started`, `message.delta`, `message.completed`, `run.completed`, and `run.failed`. Joining the deltas produces `mock:mock-text:<message>`. `verified` comes from the current verifier, which accepts text because no verification policy exists. Authentication and validation errors stay HTTP errors. After the stream starts, failures are `run.failed` with no traceback or secret. Disconnect cancels the run and closes the mock stream.
 
-The provider remains the local mock. Health does not claim production inference.
+## Workspace
+
+The composer posts to the same-origin route `/api/chat/stream`. That route attaches `KAI_LOCAL_BEARER_TOKEN` on the server and calls `POST /api/v1/chat/stream`. The browser never sees the token. Deltas update the assistant message as they arrive. Stop generation aborts the browser request so the API can cancel the provider stream. The label is Local Mock Provider. KAI is not using a production model.
+
+`POST /api/conversations` mints a conversation id in the workspace process. Reload shows that transcript until the process restarts. PostgreSQL is not written.
 
 ## Next step
 
-Connect the disabled workspace composer to `POST /api/v1/chat/stream` through a same-origin handler so the browser never receives the local bearer token. Keep `MockModelProvider` as the only provider.
+Persist conversations and messages in PostgreSQL through the existing schema and organization boundary. Keep `MockModelProvider` as the only provider. Do not add a hosted model.

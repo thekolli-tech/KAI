@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./session-store": "./src/session-store.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/health.test.ts"
+    "test": "node --experimental-strip-types --import ./register.mjs --test src/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

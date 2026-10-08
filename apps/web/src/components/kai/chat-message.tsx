@@ -9,6 +9,7 @@ type ChatMessageProps = {
   role: ChatRole;
   content: string;
   modelLabel?: string;
+  streaming?: boolean;
 };
 
 const roleLabels: Record<ChatRole, string> = {
@@ -17,12 +18,17 @@ const roleLabels: Record<ChatRole, string> = {
   system: "Status",
 };
 
-export function ChatMessage({ role, content, modelLabel }: ChatMessageProps) {
+export function ChatMessage({ role, content, modelLabel, streaming = false }: ChatMessageProps) {
   return (
     <article className="grid gap-2">
       <header className="flex items-baseline justify-between gap-3 text-[11px] tracking-[0.16em] text-silver uppercase">
         <span>{roleLabels[role]}</span>
-        {role === "assistant" ? <span>{modelLabel ?? "Model not recorded"}</span> : null}
+        {role === "assistant" ? (
+          <span className="flex items-center gap-2">
+            <span>{modelLabel ?? "Development Model"}</span>
+            {streaming ? <span className="text-gold">Streaming</span> : null}
+          </span>
+        ) : null}
       </header>
       <div className="kai-markdown text-sm leading-6 text-foreground/90">
         <ReactMarkdown
