@@ -25,7 +25,9 @@ class _Provider:
         self.healthy = True
         self.fail_health = False
         self.fail_generate = False
+        self.fail_stream = False
         self.generate_calls = 0
+        self.stream_calls = 0
         self.output_provider_id = provider_id
         self.output_model_id = model_id
 
@@ -54,6 +56,9 @@ class _Provider:
         )
 
     async def stream(self, request: GenerateRequest):
+        self.stream_calls += 1
+        if self.fail_stream:
+            raise RuntimeError("stream failed")
         yield request.prompt
 
 
@@ -141,6 +146,47 @@ def test_mismatched_output_identity_is_execution_failure() -> None:
     provider.output_model_id = "elsewhere"
     with pytest.raises(ExecutionFailureError):
         asyncio.run(router_execute(provider))
+
+
+def test_stream_yields_provider_chunks_without_generate() -> None:
+    provider = _Provider()
+    request = _request()
+    choice = ModelChoice(provider_id=provider.provider_id, model_id=provider.model_id)
+
+    async def collect() -> list[str]:
+        return [chunk async for chunk in _router(provider).stream(request, choice)]
+
+    assert asyncio.run(collect()) == ["route this"]
+    assert provider.generate_calls == 0
+    assert provider.stream_calls == 1
+
+
+def test_stream_failure_is_execution_failure() -> None:
+    provider = _Provider()
+    provider.fail_stream = True
+    request = _request()
+    choice = ModelChoice(provider_id=provider.provider_id, model_id=provider.model_id)
+
+    async def collect() -> list[str]:
+        return [chunk async for chunk in _router(provider).stream(request, choice)]
+
+    with pytest.raises(ExecutionFailureError) as caught:
+        asyncio.run(collect())
+    assert isinstance(caught.value.__cause__, RuntimeError)
+
+
+def test_unhealthy_provider_does_not_stream() -> None:
+    provider = _Provider()
+    provider.healthy = False
+    request = _request()
+    choice = ModelChoice(provider_id=provider.provider_id, model_id=provider.model_id)
+
+    async def collect() -> list[str]:
+        return [chunk async for chunk in _router(provider).stream(request, choice)]
+
+    with pytest.raises(ProviderUnavailableError):
+        asyncio.run(collect())
+    assert provider.stream_calls == 0
 
 
 def router_execute(provider: _Provider) -> str:

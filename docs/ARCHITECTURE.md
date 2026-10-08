@@ -65,17 +65,17 @@ Kinds are `invalid_input`, `unavailable_dependency`, `stage_failure`, `provider_
 
 ### Cancellation
 
-`handle` accepts a `CancellationToken`. The orchestrator checks it before every stage and before returning a response. Cancelling the token raises `EngineError` with kind `cancelled`. `asyncio.CancelledError` is not converted into a stage failure; it propagates so the caller's task can cancel. There is no job queue.
+`handle` and `handle_stream` accept a `CancellationToken`. The orchestrator checks it before every stage, before model execution, and between streamed chunks. Cancelling the token becomes `EngineError` with kind `cancelled`. `handle` raises that error. `handle_stream` emits it as `run.failed`. `asyncio.CancelledError` is not converted into a stage failure; it propagates so the caller's task can cancel. There is no job queue.
 
 ### Model boundary
 
-`ModelRouter.select` returns a `ModelChoice`. The orchestrator stores it, checks cancellation again, then calls `ModelRouter.execute`. The returned text is stored on `ExecutionContext.model_result` and is the candidate passed to verification and response composition. Agent text stays on the context and is not rewritten into that candidate.
+`ModelRouter.select` returns a `ModelChoice`. `handle` stores it, checks cancellation again, then calls `ModelRouter.execute`. `handle_stream` checks cancellation, then calls `ModelRouter.stream` and yields each chunk before verification. The joined text is stored on `ExecutionContext.model_result` and is the candidate passed to verification and response composition. Agent text stays on the context and is not rewritten into that candidate.
 
-`kai_engine` does not import `ModelProvider` or `MockModelProvider`. `RegisteredModelRouter` in the API resolves a provider from an injected `ProviderRegistry` and calls `generate`. `handle` does not emit stream events. `ModelProvider.stream` remains the local streaming port for a later SSE adapter.
+`kai_engine` does not import `ModelProvider`, `MockModelProvider`, FastAPI, Starlette, or an SSE library. `RegisteredModelRouter` resolves a provider from an injected `ProviderRegistry` and calls `generate` or `stream`. The model runtime yields text chunks. The engine yields public `RunEvent` values. The HTTP layer serializes those events as SSE.
 
 ### Errors from the model path
 
-The router raises `ProviderUnavailableError` when the provider id or model id is not registered, when `health_check` returns false, or when `health_check` itself fails. It raises `ExecutionFailureError` when `generate` fails or returns a different provider or model id. The orchestrator records those at the model selection stage and stops the pipeline.
+The router raises `ProviderUnavailableError` when the provider id or model id is not registered, when `health_check` returns false, or when `health_check` itself fails. It raises `ExecutionFailureError` when `generate` or `stream` fails, or when `generate` returns a different provider or model id. The orchestrator records those at the model selection stage. `handle` raises `EngineError`. `handle_stream` emits `run.failed`.
 
 ## Model runtime
 
@@ -156,14 +156,24 @@ Versioned routes that exist:
 - `GET /api/v1/health`
 - `GET /health` for a process probe
 - `POST /api/v1/chat`
+- `POST /api/v1/chat/stream`
 
 `POST /api/v1/chat` accepts `message` and optional `conversation_id`, `project_id`, and `attachment_ids`. It does not accept an organization id. `LocalDevelopmentAuthenticator` resolves the principal from server settings and only outside production. The route then calls `organization_boundary` and `KaiEngineOrchestrator.handle`. The HTTP body is the `EngineResponse`. Typed engine failures use `EngineError.to_public_dict()`. Any other exception is a generic 500 with no exception text.
 
-The stages beside the model router are pass-throughs in the API composition root. They do not classify, search, retrieve documents, execute tools, or write an agent reply. The response message is the mock provider's text. `MockModelProvider` remains the only provider.
+`POST /api/v1/chat/stream` uses that same authentication, organization boundary, `ChatRequest` validation, request id, and engine request. The client cannot supply the organization id. The response is `text/event-stream` with `Cache-Control: no-cache` and `X-Accel-Buffering: no`. The HTTP layer encodes public `RunEvent` values. `ModelProvider` does not format SSE.
+
+Public events are `run.started`, `message.delta`, `message.completed`, `run.completed`, and `run.failed`. Each data object includes `request_id`, `run_id`, and `organization_id`. Deltas are the provider chunks. Joining them reconstructs `provider_id:model_id:message`. For the registered mock that text is `mock:mock-text:<message>`. `message.completed` and `run.completed` carry the response message, model id, provider id, and `verified`.
+
+`verified` is the verification result. `AcceptingVerifier` still accepts every candidate because no verification policy exists. Finishing the stream does not set `verified`. A rejected `VerificationResult` is `run.failed` with kind `verification_failure` and does not emit `run.completed`.
+
+Authentication and validation failures happen before the body and use the same HTTP statuses as `POST /api/v1/chat`. After the stream starts, failures are `run.failed`. Typed failures use `EngineError.to_public_dict()`. Any other exception is `{"message":"The request could not be completed."}` with no exception text, traceback, or secret. The connection then closes.
+
+A client disconnect cancels the request `CancellationToken` and closes the provider stream. A cancellation the engine observes between chunks is `run.failed` with kind `cancelled`. It is not an HTTP 500. There is no task queue.
+
+The stages beside the model router are pass-throughs in the API composition root. They do not classify, search, retrieve documents, execute tools, or write an agent reply. The response message is the mock provider's text. `MockModelProvider` remains the only provider. Health still reports `model_runtime: mock` and `engine: interface_only`. This is not production inference.
 
 Routes that are specified for later phases and are intentionally absent:
 
-- `POST /api/v1/chat/stream`
 - conversation CRUD
 - `POST /api/v1/files`
 - `POST /api/v1/search`
@@ -214,8 +224,12 @@ kai_engine → ModelRouter protocol only
 model-runtime → its own provider, mock, and registry contracts
 ```
 
-`kai_engine` does not import the model runtime, tool, agent, memory, search, or document packages, and it does not import a web framework or a database client. The API constructs the registry and the router. It still does not mount the orchestrator on a chat route, because the other stages have no product implementations.
+`kai_engine` does not import the model runtime, tool, agent, memory, search, or document packages, and it does not import a web framework, an SSE library, or a database client. The API composition root constructs the registry and the router. Chat and the SSE route call the orchestrator through that router. The other stages are pass-throughs.
 
-## Phase 5
+## Streaming
 
-Add `POST /api/v1/chat/stream` that reads `MockModelProvider.stream` through the existing router boundary and emits SSE. Keep `MockModelProvider` as the only provider. Do not add a hosted model, and do not put provider construction inside `kai_engine`.
+`POST /api/v1/chat/stream` is the streaming chat route. The path is HTTP, then the API composition root, then `KaiEngineOrchestrator.handle_stream`, then `RegisteredModelRouter.stream`, then `ModelProvider.stream`, then `MockModelProvider.stream`. The route does not construct a provider. `kai_engine` does not import `MockModelProvider`.
+
+## Next step
+
+Connect the disabled workspace composer to `POST /api/v1/chat/stream` through a same-origin handler so the browser never receives the local bearer token. Keep `MockModelProvider` as the only provider. Do not add a hosted model.

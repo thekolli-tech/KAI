@@ -43,8 +43,8 @@ def create_app(
         version=product.version,
         summary=f"{product.product} by {product.maker}",
         description=(
-            "Health checks and POST /api/v1/chat are exposed. Chat uses the local "
-            "mock model. It is not a hosted provider."
+            "Health checks, POST /api/v1/chat, and POST /api/v1/chat/stream are "
+            "exposed. Chat uses the local mock model. It is not a hosted provider."
         ),
         docs_url="/api/v1/docs",
         openapi_url="/api/v1/openapi.json",
