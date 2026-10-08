@@ -4,6 +4,9 @@
 
 services:
   postgres:
+    # Conversation tests use database kai_test and role kai. After this service
+    # is healthy, run infrastructure/postgres/bootstrap_test_db.py.
+    # POSTGRES_PASSWORD must be kai-local-password for the default test URL.
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-kai}

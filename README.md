@@ -76,6 +76,15 @@ docker compose up -d
 
 The schema file is `infrastructure/postgres/migrations/001_initial.sql`. Apply it to the database in `DATABASE_URL`. A fresh Docker volume applies it on first start. The API does not run the migration itself.
 
+Conversation tests need a real PostgreSQL database named `kai_test` on `127.0.0.1:5432`. Set `POSTGRES_PASSWORD=kai-local-password` in `.env`, start Compose, then bootstrap:
+
+```bash
+docker compose up -d postgres
+scripts/py infrastructure/postgres/bootstrap_test_db.py
+```
+
+The bootstrap creates `kai_test`, applies the schema, and checks `SET ROLE kai_app` with forced row-level security. A local PostgreSQL 16 server can replace Docker. `KAI_TEST_DATABASE_URL` overrides the default test URL. GitHub Actions starts this database for the API job.
+
 ## Checks
 
 ```bash
