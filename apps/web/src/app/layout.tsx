@@ -1,0 +1,37 @@
+import type { Metadata } from "next";
+import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { brand } from "@kai/shared";
+
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const display = Instrument_Serif({
+  variable: "--font-instrument-serif",
+  subsets: ["latin"],
+  weight: "400",
+});
+
+export const metadata: Metadata = {
+  title: `${brand.name} by ${brand.maker}`,
+  description: brand.tagline,
+};
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} ${display.variable} dark h-full antialiased`}
+    >
+      <body className="min-h-full bg-background text-foreground">{children}</body>
+    </html>
+  );
+}
