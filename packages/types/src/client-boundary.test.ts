@@ -26,6 +26,7 @@ test("client source does not carry credentials or provider internals", () => {
     for (const banned of [
       "localStorage",
       "sessionStorage",
+      "createSessionStore",
       "MockModelProvider",
       "ProviderRegistry",
       "KaiEngine",

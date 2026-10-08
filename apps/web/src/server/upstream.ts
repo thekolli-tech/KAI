@@ -13,3 +13,11 @@ export function localBearerToken(): string {
 export function chatStreamUrl(): string {
   return `${apiOrigin()}/api/v1/chat/stream`;
 }
+
+export function conversationsUrl(): string {
+  return `${apiOrigin()}/api/v1/conversations`;
+}
+
+export function conversationUrl(id: string): string {
+  return `${conversationsUrl()}/${id}`;
+}

@@ -25,7 +25,7 @@ export function describeCheck(state: CheckState): string {
     case "not_configured":
       return "Not configured";
     case "configured_unchecked":
-      return "Configured, not connected";
+      return "Configured, not checked";
   }
 }
 

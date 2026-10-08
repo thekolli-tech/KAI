@@ -48,8 +48,8 @@ export function Composer() {
         )}
       </form>
       <p id="composer-note" className="mt-2 text-xs text-muted-foreground">
-        {providerLabel("mock")}. {mockRuntimeNote} This workspace process keeps the transcript.
-        It is not written to the database.
+        {providerLabel("mock")}. {mockRuntimeNote} Conversations are saved for this
+        organization.
       </p>
     </div>
   );

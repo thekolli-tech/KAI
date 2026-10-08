@@ -14,7 +14,7 @@ The model runtime registers `MockModelProvider`, a deterministic local stand-in 
 - `MockModelProvider` and `RegisteredModelRouter`, composed by the API and kept out of `kai_engine`
 - PostgreSQL schema and Docker Compose for PostgreSQL, Redis, Qdrant, and MinIO
 
-Health reports `model_runtime: mock`. `POST /api/v1/chat` and `POST /api/v1/chat/stream` run the orchestrator against that mock. The workspace composer streams through a same-origin handler. The browser does not receive the local bearer token. The other stages are pass-throughs. Tool execution, agents, memory, document ingestion, and production authentication are not implemented. Transcripts are kept in the workspace process and are not written to PostgreSQL.
+Health reports `model_runtime: mock`. `POST /api/v1/chat` and `POST /api/v1/chat/stream` run the orchestrator against that mock. The workspace composer streams through a same-origin handler. The browser does not receive the local bearer token. The other stages are pass-throughs. Tool execution, agents, memory, document ingestion, and production authentication are not implemented. Conversations and messages are stored in PostgreSQL for the authenticated organization.
 
 ## Layout
 
@@ -51,7 +51,7 @@ cp .env.example .env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-Replace the `change-me` passwords in `.env` before starting Docker. Leave the infrastructure URLs blank unless you want the health check to report them as configured. The API does not connect to them.
+Replace the `change-me` passwords in `.env` before starting Docker. Leave the infrastructure URLs blank unless you want the health check to report them as configured. Set `DATABASE_URL` and apply `infrastructure/postgres/migrations/001_initial.sql` before using conversations. The API reads and writes conversations as `kai_app`.
 
 ## Run
 
@@ -74,7 +74,7 @@ pnpm dev:web
 docker compose up -d
 ```
 
-The schema file is `infrastructure/postgres/migrations/001_initial.sql`. The API does not apply it yet.
+The schema file is `infrastructure/postgres/migrations/001_initial.sql`. Apply it to the database in `DATABASE_URL`. A fresh Docker volume applies it on first start. The API does not run the migration itself.
 
 ## Checks
 
@@ -90,7 +90,7 @@ Python commands use `scripts/py`, which prefers `.venv`.
 
 ## Local model path
 
-`apps/api` builds a `ProviderRegistry` with `MockModelProvider` and passes it to `RegisteredModelRouter`. `KaiEngineOrchestrator.handle` calls `select`, then `execute`. `handle_stream` calls `select`, then `stream`. Both pass the model text to verification. Tests in `services/model-runtime/tests` and `apps/api/tests` cover the path without a network or a database.
+`apps/api` builds a `ProviderRegistry` with `MockModelProvider` and passes it to `RegisteredModelRouter`. `KaiEngineOrchestrator.handle` calls `select`, then `execute`. `handle_stream` calls `select`, then `stream`. Both pass the model text to verification. The model-path tests do not need a network. Conversation tests need PostgreSQL.
 
 ## Chat
 
@@ -102,8 +102,8 @@ The JSON route returns the deterministic mock text. The stream route is `text/ev
 
 The composer posts to the same-origin route `/api/chat/stream`. That route attaches `KAI_LOCAL_BEARER_TOKEN` on the server and calls `POST /api/v1/chat/stream`. The browser never sees the token. Deltas update the assistant message as they arrive. Stop generation aborts the browser request so the API can cancel the provider stream. The label is Local Mock Provider. KAI is not using a production model.
 
-`POST /api/conversations` mints a conversation id in the workspace process. Reload shows that transcript until the process restarts. PostgreSQL is not written.
+`POST /api/conversations` asks the API to create a conversation for the authenticated organization. The user message is stored before the mock runs. One assistant message is stored when the run completes. A failed or cancelled run does not store a completed assistant message. Reload and a Next.js restart both read the transcript from PostgreSQL.
 
 ## Next step
 
-Persist conversations and messages in PostgreSQL through the existing schema and organization boundary. Keep `MockModelProvider` as the only provider. Do not add a hosted model.
+The local development credential is still not a production identity system. Keep `MockModelProvider` as the only provider. Do not add a hosted model.

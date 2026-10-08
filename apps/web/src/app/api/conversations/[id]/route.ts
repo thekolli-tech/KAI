@@ -1,19 +1,18 @@
 import { connection } from "next/server";
 
-import { sessions } from "@/server/sessions";
-import { displayError } from "@kai/types";
+import { jsonError, authorizedFetch, proxyJson } from "@/server/http";
+import { conversationUrl } from "@/server/upstream";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type Context = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: Context) {
   await connection();
   const { id } = await context.params;
-  const conversation = sessions.get(id);
-  if (conversation === undefined) {
-    return Response.json(
-      { message: displayError({ status: 404 }) },
-      { status: 404, headers: { "Cache-Control": "no-store" } },
-    );
+  if (!UUID_PATTERN.test(id)) {
+    return jsonError(404);
   }
-  return Response.json(conversation, { headers: { "Cache-Control": "no-store" } });
+  return proxyJson(await authorizedFetch(conversationUrl(id), { method: "GET" }));
 }

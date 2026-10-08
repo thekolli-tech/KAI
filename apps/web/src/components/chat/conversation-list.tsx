@@ -34,7 +34,7 @@ export function ConversationList() {
       {state.conversations.length === 0 ? (
         <EmptyState
           title="No conversations yet"
-          detail="Start a chat from the composer. The transcript stays in this workspace process and is not written to the database."
+          detail="Start a chat from the composer. The transcript is saved for this organization."
         />
       ) : (
         <ul className="grid gap-2">
