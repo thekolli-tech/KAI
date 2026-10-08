@@ -12,5 +12,6 @@ class EnvironmentName(StrEnum):
 class CheckState(StrEnum):
     OK = "ok"
     INTERFACE_ONLY = "interface_only"
+    MOCK = "mock"
     NOT_CONFIGURED = "not_configured"
     CONFIGURED_UNCHECKED = "configured_unchecked"

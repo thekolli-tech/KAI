@@ -34,12 +34,13 @@ export function SettingsPanel() {
       </div>
       <Modal
         title="What this phase includes"
-        description="Phase 1 is the repository, the engine boundaries, and a health check."
+        description="The workspace shows health and registers a local mock model. Chat is not exposed."
         trigger={<Button variant="outline">Phase scope</Button>}
       >
         <ul className="grid gap-2 text-sm text-muted-foreground">
           <li>The web workspace and the API health check are running.</li>
-          <li>Engine, model, tool, agent, memory, and document boundaries are interfaces.</li>
+          <li>A local mock model is registered for development. It is not a production model.</li>
+          <li>Chat, tools, agents, memory, and documents are not running.</li>
           <li>No hosted model provider is connected.</li>
         </ul>
       </Modal>

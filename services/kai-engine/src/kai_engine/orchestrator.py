@@ -1,7 +1,7 @@
 """Thin orchestrator for the eleven KAI Engine stages.
 
 The class holds protocol dependencies and moves values through them.
-It does not classify intent, plan work, or call a model provider.
+It does not classify intent, plan work, or import a model provider.
 """
 
 import asyncio
@@ -108,12 +108,14 @@ class KaiEngineOrchestrator:
 
             stage = EngineStage.MODEL_SELECTION
             self._checkpoint(stage, execution)
-            # Selection only. ModelRouter.execute waits for a ModelProvider.
-            execution.selected_model = await self._model_router.select(
+            choice = await self._model_router.select(
                 normalized,
                 plan,
                 context=execution,
             )
+            execution.selected_model = choice
+            self._checkpoint(stage, execution)
+            execution.model_result = await self._model_router.execute(normalized, choice)
 
             stage = EngineStage.TOOL_SELECTION
             self._checkpoint(stage, execution)
@@ -135,7 +137,9 @@ class KaiEngineOrchestrator:
 
             stage = EngineStage.VERIFICATION
             self._checkpoint(stage, execution)
-            candidate = execution.agent_result if execution.agent_result is not None else ""
+            candidate = execution.model_result
+            if candidate is None:
+                raise self._error(EngineErrorKind.STAGE_FAILURE, stage, execution)
             verification = await self._verifier.verify(
                 normalized,
                 candidate,

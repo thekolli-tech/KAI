@@ -47,7 +47,7 @@ kai_search = "services/search/src/kai_search"
 kai_documents = "services/documents/src/kai_documents"
 
 [tool.pytest.ini_options]
-testpaths = ["apps/api/tests", "services/kai-engine/tests"]
+testpaths = ["apps/api/tests", "services/kai-engine/tests", "services/model-runtime/tests"]
 addopts = "-q"
 
 [tool.ruff]

@@ -2,7 +2,7 @@
 
 KAI by THEKOLLI is a provider-agnostic AI intelligence platform. This repository has a Next.js workspace, a FastAPI modular monolith, and a KAI Engine orchestrator that calls stage protocols. It does not call a hosted model.
 
-The model runtime is an interface. OpenAI, Anthropic, Gemini, and Perplexity are not integrated. A later phase can add a mock provider, then a self-hosted runtime, without rewriting the workspace or the engine contracts.
+The model runtime registers `MockModelProvider`, a deterministic local stand-in for development and tests. It is not a production intelligence provider. OpenAI, Anthropic, Gemini, and Perplexity are not integrated.
 
 ## What runs in this phase
 
@@ -11,9 +11,10 @@ The model runtime is an interface. OpenAI, Anthropic, Gemini, and Perplexity are
 - Shared TypeScript contracts in `packages/`
 - Python interfaces for the engine, models, tools, agents, memory, search, and documents
 - `KaiEngineOrchestrator`, which runs those stage protocols when they are injected
+- `MockModelProvider` and `RegisteredModelRouter`, composed by the API and kept out of `kai_engine`
 - PostgreSQL schema and Docker Compose for PostgreSQL, Redis, Qdrant, and MinIO
 
-The orchestrator is not mounted on a chat route. Chat, tool execution, agents, memory, document ingestion, and authentication do not have product implementations. The workspace does not pretend they do.
+Health reports `model_runtime: mock`. The orchestrator is not mounted on a chat route. Chat, tool execution, agents, memory, document ingestion, and authentication do not have product implementations. The workspace does not pretend they do.
 
 ## Layout
 
@@ -87,6 +88,10 @@ pnpm build
 
 Python commands use `scripts/py`, which prefers `.venv`.
 
+## Local model path
+
+`apps/api` builds a `ProviderRegistry` with `MockModelProvider` and passes it to `RegisteredModelRouter`. `KaiEngineOrchestrator` calls `select`, then `execute`, and passes that text to verification. Tests in `services/model-runtime/tests` and `apps/api/tests/test_model_path.py` cover the path without a network or a database.
+
 ## Next step
 
-Phase 3 adds `MockModelProvider` behind `ModelProvider`, and a router that the orchestrator can call. The mock stays out of `KaiEngineOrchestrator`.
+Phase 4 adds `POST /api/v1/chat` at the composition root, with the orchestrator and the mock router injected. The mock stays the only provider.

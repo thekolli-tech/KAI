@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from kai_api.composition import build_model_router
 from kai_api.config import get_settings
 from kai_api.health import HealthResponse, build_health
 from kai_api.middleware import RequestIdMiddleware
@@ -33,8 +34,8 @@ def create_app() -> FastAPI:
         version=product.version,
         summary=f"{product.product} by {product.maker}",
         description=(
-            "Health checks are exposed. The engine orchestrator is not mounted "
-            "on a chat route, and no model provider is connected."
+            "Health checks are exposed. A local mock model provider is registered "
+            "for development. The engine orchestrator is not mounted on a chat route."
         ),
         docs_url="/api/v1/docs",
         openapi_url="/api/v1/openapi.json",
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-Id"],
     )
+    app.state.model_router = build_model_router()
     app.add_middleware(RequestIdMiddleware)
     app.include_router(api_router, prefix="/api/v1")
     app.include_router(probe_router)

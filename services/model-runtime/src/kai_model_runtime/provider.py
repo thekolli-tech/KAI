@@ -1,7 +1,8 @@
 """Provider boundary for KAI.
 
-Concrete providers (mock, local, Ollama, vLLM) implement ModelProvider.
-The engine depends on normalized text, not on a vendor SDK.
+Concrete providers implement ModelProvider. The engine never imports them.
+MockModelProvider is a local deterministic stand-in for tests and development.
+It is not a production intelligence provider.
 """
 
 from collections.abc import AsyncIterator

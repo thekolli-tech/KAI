@@ -2,8 +2,8 @@
 
 Stages stay free of a concrete model provider. ``KaiEngineOrchestrator``
 calls these protocols in order and passes the shared ``ExecutionContext``.
-``ModelRouter.execute`` remains the invocation port and is not called until
-a provider exists.
+``ModelRouter.execute`` is the invocation port. The concrete router lives
+outside this package and is the only caller of ``ModelProvider``.
 """
 
 from typing import Protocol
@@ -67,11 +67,7 @@ class ModelRouter(Protocol):
         """Choose a provider and model. Provider SDKs stay outside the engine."""
 
     async def execute(self, request: EngineRequest, selection: ModelChoice) -> str:
-        """Run the selected model and return normalized text.
-
-        The orchestrator does not call this until a ModelProvider is connected
-        behind a router. Calling it from KaiEngine would pretend a model ran.
-        """
+        """Run the selected model through a provider and return normalized text."""
 
 
 class ToolRouter(Protocol):

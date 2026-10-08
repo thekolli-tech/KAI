@@ -12,7 +12,7 @@ User
   → models, tools, memory, documents, search
 ```
 
-Phase 1 shipped the web app, the API health check, and the contracts below. Phase 2 adds the orchestrator that calls those stage protocols. The API still does not expose a chat route.
+Phase 1 shipped the web app, the API health check, and the contracts below. Phase 2 adds the orchestrator. Phase 3 registers a local mock model and calls it through `ModelRouter`. The API still does not expose a chat route.
 
 The API is a modular monolith. `services/*` are Python packages imported by that process. They are not separate network services. Split them only when a boundary has its own scaling or security reason.
 
@@ -24,19 +24,19 @@ The API is a modular monolith. `services/*` are Python packages imported by that
 2. Intent detection classifies the message.
 3. Context construction assembles organization-scoped memory and document ids.
 4. Planning produces a `TaskPlan`.
-5. Model selection chooses a provider id and model id.
+5. Model selection chooses a provider id and model id, then the router executes that model.
 6. Tool selection chooses tool names.
 7. Agent execution delegates once to an agent.
 8. Memory retrieval returns memory ids for the caller's organization.
 9. Tool execution runs each selected tool, or none when the selection is empty.
-10. Verification accepts or rejects the agent stage's text.
+10. Verification accepts or rejects the model router's text.
 11. Response composition returns an `EngineResponse`.
 
 The orchestrator stores each result on an `ExecutionContext` and passes that context into the next stage. It does not classify, plan, or write the answer. There are still no product implementations of the individual stages. Tests supply doubles. A stage that raised `NotImplementedError` and was registered as a real capability would look like a product feature, so none is registered.
 
-`ExecutionContext` carries the request id, run id, user id, organization id, conversation id, raw input, normalized request, intent, context bundle, plan, selected model, selected tools, selected agents, memory ids, tool results, agent text, verification, and response. A field is `None` until that stage has run. An empty tuple or string means the stage ran and produced nothing.
+`ExecutionContext` carries the request id, run id, user id, organization id, conversation id, raw input, normalized request, intent, context bundle, plan, selected model, model result, selected tools, selected agents, memory ids, tool results, agent text, verification, and response. A field is `None` until that stage has run. An empty tuple or string means the stage ran and produced nothing.
 
-The candidate passed to verification is only the agent stage's string. It is empty when that stage returns an empty string. Tool results stay on the context. They are not rewritten into a prompt, and they are not presented as model output.
+The candidate passed to verification is the model router's text. It is an empty string when the router returns an empty string. Tool results and agent text stay on the context. They are not rewritten into a prompt.
 
 ### Dependency injection
 
@@ -69,13 +69,13 @@ Kinds are `invalid_input`, `unavailable_dependency`, `stage_failure`, `provider_
 
 ### Model boundary
 
-`ModelRouter.select` returns a `ModelChoice`. `ModelRouter.execute` is the invocation port and the orchestrator does not call it. Doing so would require a model and would look like a completed generation.
+`ModelRouter.select` returns a `ModelChoice`. The orchestrator stores it, checks cancellation again, then calls `ModelRouter.execute`. The returned text is stored on `ExecutionContext.model_result` and is the candidate passed to verification and response composition. Agent text stays on the context and is not rewritten into that candidate.
 
-`ModelProvider` in `services/model-runtime` is the runtime port (`generate`, `stream`, `get_capabilities`, `health_check`). The engine package does not import it. A future router, outside `kai_engine`, is what calls `ModelProvider`. That keeps provider SDKs and provider request shapes out of the orchestrator. `ModelProvider.stream` is unchanged. `handle` does not emit stream events.
+`kai_engine` does not import `ModelProvider` or `MockModelProvider`. `RegisteredModelRouter` in the API resolves a provider from an injected `ProviderRegistry` and calls `generate`. `handle` does not emit stream events. `ModelProvider.stream` remains the local streaming port for a later SSE adapter.
 
-### Contract note
+### Errors from the model path
 
-The engine's model dependency is `ModelRouter`, which already existed, rather than a second provider protocol inside `kai_engine`. Importing `ModelProvider` from the engine would couple the orchestrator to the runtime package. Phase 3 implements a router against `ModelProvider` and only then should `handle` start calling `execute`.
+The router raises `ProviderUnavailableError` when the provider id or model id is not registered, when `health_check` returns false, or when `health_check` itself fails. It raises `ExecutionFailureError` when `generate` fails or returns a different provider or model id. The orchestrator records those at the model selection stage and stops the pipeline.
 
 ## Model runtime
 
@@ -86,16 +86,19 @@ The engine's model dependency is `ModelRouter`, which already existed, rather th
 - `get_capabilities()`
 - `health_check()`
 
-Planned implementations, none of which exist yet:
+`MockModelProvider` implements that protocol locally. Output is a configured fixture for the prompt, or the deterministic text `provider_id:model_id:prompt`. `stream` yields fixed-size slices of that same text and does not sleep. Capabilities are `text` and `stream`. Tool calling and vision are absent. There is no embeddings capability on the contract. `health_check` returns the configured boolean. The class does not open a socket and does not read an API key.
 
-- `MockModelProvider` for local development
+`ProviderRegistry` maps an explicit provider id to an injected `ModelProvider`. `resolve(provider_id, model_id)` checks `get_capabilities()`. An unknown provider or model raises `UnknownProviderError` or `UnknownModelError`. The registry is constructed by the caller. It is not a process-wide singleton, and the router does not construct providers.
+
+The API composition root builds one registry containing `MockModelProvider` (`provider_id=mock`, `model_id=mock-text`) and a `RegisteredModelRouter` around it. Health reports `model_runtime: mock`. An empty registry reports `model_runtime: interface_only`. `mock` means a local development stand-in, not production inference. The engine check stays `interface_only` because the orchestrator is not mounted on a route.
+
+`KAI_MODEL_PROVIDER` is still reserved. A vendor name in that variable is not echoed and does not change the registered provider.
+
+Planned implementations that do not exist yet:
+
 - `LocalModelProvider`
 - `OllamaProvider`
 - `VLLMProvider`
-
-Adding one of those means a new class in `services/model-runtime` and a registration point beside the API. The web app and the engine protocols stay as they are.
-
-`KAI_MODEL_PROVIDER` is reserved. The health check always reports `model_runtime: interface_only`, including when the variable names a vendor. The API does not echo that value.
 
 ## Tools
 
@@ -202,13 +205,13 @@ Design-system components live under `apps/web/src/components`. shadcn/ui supplie
 
 ```
 apps/web → packages/shared, packages/types, packages/config
-apps/api → kai_engine and the other service packages
-kai_engine → its own protocols only
-model-runtime, tools, agents, memory, search, documents → their own contracts
+apps/api → composition → ModelRouter → ModelProvider → MockModelProvider
+kai_engine → ModelRouter protocol only
+model-runtime → its own provider, mock, and registry contracts
 ```
 
-`kai_engine` does not import the model runtime, tool, agent, memory, search, or document packages, and it does not import a web framework or a database client. The API remains the composition root. It does not construct an orchestrator yet, because there are no stage implementations to inject.
+`kai_engine` does not import the model runtime, tool, agent, memory, search, or document packages, and it does not import a web framework or a database client. The API constructs the registry and the router. It still does not mount the orchestrator on a chat route, because the other stages have no product implementations.
 
-## Phase 3
+## Phase 4
 
-Add `MockModelProvider` behind `ModelProvider`, and a `ModelRouter` implementation that calls it. Then `KaiEngineOrchestrator` can call `ModelRouter.execute` and pass that text to verification. The mock must be visibly local. It is not a hosted provider, and it does not belong in the orchestrator.
+Add `POST /api/v1/chat` at the composition root. Inject `KaiEngineOrchestrator` with `RegisteredModelRouter` and explicit stage implementations for the stages that are still doubles in tests. Return the engine response. Keep `MockModelProvider` as the only provider. Do not add a hosted model, and do not put provider construction inside `kai_engine`. Streaming SSE can follow that route once the mock text is returned on the request path.

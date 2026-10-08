@@ -63,6 +63,8 @@ class Stages:
         self.bad_response_id = False
         self.raise_cancelled = False
         self.model_executed = False
+        self.model_text = "model-text"
+        self.execute_error: BaseException | None = None
         self.execute_calls: list[str] = []
         self.candidate: str | None = None
         self.verified_with: ExecutionContext | None = None
@@ -134,12 +136,17 @@ class Stages:
 
     async def execute_model(self, request: EngineRequest, selection: ModelChoice) -> str:
         self.model_executed = True
-        raise AssertionError(selection.model_id)
+        if self.execute_error is not None:
+            raise self.execute_error
+        assert selection.provider_id == "unconfigured"
+        assert request.message != ""
+        return self.model_text
 
     async def select_tools(self, plan: TaskPlan, *, context: ExecutionContext) -> list[str]:
         self._hit(EngineStage.TOOL_SELECTION, context)
         assert context.selected_model is not None
         assert context.selected_model.provider_id == "unconfigured"
+        assert context.model_result == self.model_text
         return list(self.tool_names)
 
     async def execute_tool(
@@ -299,9 +306,11 @@ def test_stages_run_in_documented_order_and_pass_outputs() -> None:
     response = _run(stages, request, run_id=run_id)
 
     assert stages.order == list(STAGE_ORDER)
-    assert stages.model_executed is False
-    assert stages.candidate == "agent-output"
+    assert stages.model_executed is True
+    assert stages.candidate == "model-text"
     assert stages.verified_with is not None
+    assert stages.verified_with.model_result == "model-text"
+    assert stages.verified_with.agent_result == "agent-output"
     assert stages.verified_with.selected_agents == ("ResearchAgent",)
     assert stages.verified_with.tool_results is not None
     assert stages.verified_with.tool_results[0].tool_name == "file_read"
@@ -325,7 +334,8 @@ def test_empty_stage_results_do_not_invent_a_model_response() -> None:
 
     assert stages.execute_calls == []
     assert "tool_execution" not in stages.order
-    assert stages.candidate == ""
+    assert stages.model_executed is True
+    assert stages.candidate == "model-text"
     assert stages.verified_with is not None
     assert stages.verified_with.selected_tools == ()
     assert stages.verified_with.selected_agents == ()
@@ -488,6 +498,30 @@ def test_cancellation_between_stages_stops_the_next_stage() -> None:
     assert caught.value.kind is EngineErrorKind.CANCELLED
     assert caught.value.stage is EngineStage.CONTEXT
     assert stages.order == ["intake", "intent"]
+
+
+def test_model_execution_failure_stops_before_later_stages() -> None:
+    stages = Stages()
+    stages.execute_error = ProviderUnavailableError()
+    with pytest.raises(EngineError) as caught:
+        _run(stages, _request())
+    error = caught.value
+    assert error.kind is EngineErrorKind.PROVIDER_UNAVAILABLE
+    assert error.stage is EngineStage.MODEL_SELECTION
+    assert error.context.selected_model is not None
+    assert error.context.model_result is None
+    assert EngineStage.TOOL_SELECTION.value not in stages.order
+
+
+def test_cancellation_during_selection_skips_model_execution() -> None:
+    stages = Stages()
+    stages.cancel_during = EngineStage.MODEL_SELECTION
+    with pytest.raises(EngineError) as caught:
+        _run(stages, _request())
+    assert caught.value.kind is EngineErrorKind.CANCELLED
+    assert caught.value.stage is EngineStage.MODEL_SELECTION
+    assert stages.model_executed is False
+    assert EngineStage.TOOL_SELECTION.value not in stages.order
 
 
 def test_task_cancellation_is_not_rewritten() -> None:

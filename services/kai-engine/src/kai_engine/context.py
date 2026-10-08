@@ -47,6 +47,7 @@ class ExecutionContext:
     retrieved_context: ContextBundle | None = None
     plan: TaskPlan | None = None
     selected_model: ModelChoice | None = None
+    model_result: str | None = None
     selected_tools: tuple[str, ...] | None = None
     selected_agents: tuple[str, ...] | None = None
     tool_results: tuple[ToolExecutionResult, ...] | None = None

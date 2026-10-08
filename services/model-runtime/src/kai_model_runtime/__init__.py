@@ -1,5 +1,6 @@
-"""Model runtime interfaces. No provider is registered in Phase 1."""
+"""Model runtime. MockModelProvider is local development infrastructure."""
 
+from kai_model_runtime.mock import MockModelProvider
 from kai_model_runtime.provider import (
     GenerateRequest,
     ModelCapabilities,
@@ -7,11 +8,14 @@ from kai_model_runtime.provider import (
     ModelOutput,
     ModelProvider,
 )
+from kai_model_runtime.registry import ProviderRegistry
 
 __all__ = [
     "GenerateRequest",
+    "MockModelProvider",
     "ModelCapabilities",
     "ModelCapability",
     "ModelOutput",
     "ModelProvider",
+    "ProviderRegistry",
 ]

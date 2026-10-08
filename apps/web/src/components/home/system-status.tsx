@@ -54,7 +54,7 @@ function ReadyStatus({ report }: { report: HealthReport }) {
       <AgentStatus
         name="KAI Engine"
         state="idle"
-        detail="Stage interfaces are defined. The pipeline does not run in this phase."
+        detail="The orchestrator is not mounted on a chat route."
       />
       <dl className="grid gap-2 sm:grid-cols-2">
         {checkEntries(report).map(({ key, state }) => (

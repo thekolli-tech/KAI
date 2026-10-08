@@ -58,7 +58,9 @@ def test_engine_package_imports_stay_inside_the_engine() -> None:
     assert offenders == []
 
 
-def test_orchestrator_does_not_invoke_the_model_port() -> None:
+def test_orchestrator_calls_the_router_and_not_a_provider() -> None:
     source = ORCHESTRATOR.read_text(encoding="utf-8")
-    assert "self._model_router.execute" not in source
     assert "self._model_router.select" in source
+    assert "self._model_router.execute" in source
+    assert "MockModelProvider" not in source
+    assert "GenerateRequest" not in source

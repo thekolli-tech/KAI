@@ -1,6 +1,7 @@
 export const checkStates = [
   "ok",
   "interface_only",
+  "mock",
   "not_configured",
   "configured_unchecked",
 ] as const;

@@ -26,6 +26,15 @@ test("parseHealthReport accepts the Phase 1 contract", () => {
   assert.equal(report.checks.model_runtime, "interface_only");
 });
 
+test("parseHealthReport accepts a local mock runtime", () => {
+  const report = parseHealthReport({
+    ...validReport,
+    checks: { ...validReport.checks, model_runtime: "mock" },
+  });
+  assert.equal(report.checks.model_runtime, "mock");
+  assert.equal(report.checks.engine, "interface_only");
+});
+
 test("parseHealthReport rejects an unknown service", () => {
   assert.throws(
     () => parseHealthReport({ ...validReport, service: "openai" }),

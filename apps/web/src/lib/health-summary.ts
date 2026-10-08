@@ -20,6 +20,8 @@ export function describeCheck(state: CheckState): string {
       return "Responding";
     case "interface_only":
       return "Interface only";
+    case "mock":
+      return "Local mock";
     case "not_configured":
       return "Not configured";
     case "configured_unchecked":
@@ -35,9 +37,9 @@ export function checkEntries(report: HealthReport): { key: keyof HealthReport["c
 }
 
 export function statusMessage(report: HealthReport): string {
-  return [
-    `**API** is responding on phase ${report.phase}.`,
-    "",
-    "The model runtime is an interface only, so this note is written by the workspace from the health check. It is not a model response.",
-  ].join("\n");
+  const runtime =
+    report.checks.model_runtime === "mock"
+      ? "The model runtime is a local mock for development. This note is written by the workspace. It is not a model response."
+      : "The model runtime is an interface only, so this note is written by the workspace from the health check. It is not a model response.";
+  return [`**API** is responding on phase ${report.phase}.`, "", runtime].join("\n");
 }

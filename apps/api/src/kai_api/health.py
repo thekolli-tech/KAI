@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict
 
+from kai_api.composition import build_provider_registry, model_runtime_state
 from kai_api.config import Settings
 from kai_api.product import ProductConfig
 from kai_api.status import CheckState
@@ -46,7 +47,7 @@ def build_health(settings: Settings, product: ProductConfig) -> HealthResponse:
         checks=HealthChecks(
             api=CheckState.OK,
             engine=CheckState.INTERFACE_ONLY,
-            model_runtime=CheckState.INTERFACE_ONLY,
+            model_runtime=model_runtime_state(build_provider_registry()),
             postgres=_dependency_state(settings.database_url),
             redis=_dependency_state(settings.redis_url),
             qdrant=_dependency_state(settings.qdrant_url),

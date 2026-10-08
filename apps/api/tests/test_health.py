@@ -22,7 +22,7 @@ def test_versioned_health_reports_phase_one_boundaries() -> None:
     assert body["checks"] == {
         "api": "ok",
         "engine": "interface_only",
-        "model_runtime": "interface_only",
+        "model_runtime": "mock",
         "postgres": "not_configured",
         "redis": "not_configured",
         "qdrant": "not_configured",
@@ -45,6 +45,7 @@ def test_health_does_not_echo_secrets_or_provider_names(monkeypatch) -> None:
     assert "super-secret-password" not in body
     assert "minio-secret-value" not in body
     assert "openai" not in body
+    assert '"model_runtime":"mock"' in body.replace(" ", "")
     assert "configured_unchecked" in body
 
 
