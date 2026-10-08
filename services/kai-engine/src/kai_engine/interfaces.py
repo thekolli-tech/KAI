@@ -2,14 +2,16 @@
 
 Stages stay free of a concrete model provider. ``KaiEngineOrchestrator``
 calls these protocols in order and passes the shared ``ExecutionContext``.
-``ModelRouter.execute`` is the invocation port. The concrete router lives
-outside this package and is the only caller of ``ModelProvider``.
+``ModelRouter.execute`` and ``ModelRouter.stream`` are the invocation ports.
+The concrete router lives outside this package and is the only caller of
+``ModelProvider``.
 """
 
+from collections.abc import AsyncIterator
 from typing import Protocol
 from uuid import UUID
 
-from kai_engine.context import ExecutionContext
+from kai_engine.context import CancellationToken, ExecutionContext
 from kai_engine.contracts import (
     AuthorizationDecision,
     ContextBundle,
@@ -22,6 +24,7 @@ from kai_engine.contracts import (
     ToolExecutionResult,
     VerificationResult,
 )
+from kai_engine.events import RunEvent
 
 
 class RequestIntake(Protocol):
@@ -68,6 +71,13 @@ class ModelRouter(Protocol):
 
     async def execute(self, request: EngineRequest, selection: ModelChoice) -> str:
         """Run the selected model through a provider and return normalized text."""
+
+    def stream(
+        self,
+        request: EngineRequest,
+        selection: ModelChoice,
+    ) -> AsyncIterator[str]:
+        """Yield normalized text chunks from the selected provider."""
 
 
 class ToolRouter(Protocol):
@@ -138,3 +148,12 @@ class ResponseEngine(Protocol):
 class KaiEngine(Protocol):
     async def handle(self, request: EngineRequest) -> EngineResponse:
         """Run intake through response for one request."""
+
+    def handle_stream(
+        self,
+        request: EngineRequest,
+        *,
+        cancellation: CancellationToken | None = None,
+        run_id: UUID | None = None,
+    ) -> AsyncIterator[RunEvent]:
+        """Run the same stages, yielding public events while the model streams."""

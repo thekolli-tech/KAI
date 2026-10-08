@@ -1,10 +1,12 @@
 """ModelRouter implementation. Providers are injected through a registry."""
 
+from collections.abc import AsyncIterator
+
 from kai_engine.context import ExecutionContext
 from kai_engine.contracts import EngineRequest, ModelChoice, TaskPlan
-from kai_engine.errors import ExecutionFailureError, ProviderUnavailableError
+from kai_engine.errors import EngineStageError, ExecutionFailureError, ProviderUnavailableError
 from kai_model_runtime import GenerateRequest, ModelProvider
-from kai_model_runtime.errors import UnknownModelError, UnknownProviderError
+from kai_model_runtime.errors import ModelRuntimeError, UnknownModelError, UnknownProviderError
 from kai_model_runtime.registry import ProviderRegistry
 
 
@@ -28,6 +30,39 @@ class RegisteredModelRouter:
         return ModelChoice(provider_id=self._provider_id, model_id=self._model_id)
 
     async def execute(self, request: EngineRequest, selection: ModelChoice) -> str:
+        provider = await self._ready(selection)
+        try:
+            output = await provider.generate(
+                GenerateRequest(model_id=selection.model_id, prompt=request.message)
+            )
+        except EngineStageError:
+            raise
+        except Exception as exc:
+            raise ExecutionFailureError from exc
+        if output.provider_id != selection.provider_id or output.model_id != selection.model_id:
+            raise ExecutionFailureError
+        return output.text
+
+    async def stream(
+        self,
+        request: EngineRequest,
+        selection: ModelChoice,
+    ) -> AsyncIterator[str]:
+        provider = await self._ready(selection)
+        generated = GenerateRequest(model_id=selection.model_id, prompt=request.message)
+        try:
+            async for chunk in provider.stream(generated):
+                yield chunk
+        except EngineStageError:
+            raise
+        except UnknownModelError as exc:
+            raise ProviderUnavailableError from exc
+        except ModelRuntimeError as exc:
+            raise ExecutionFailureError from exc
+        except Exception as exc:
+            raise ExecutionFailureError from exc
+
+    async def _ready(self, selection: ModelChoice) -> ModelProvider:
         provider = self._resolve(selection.provider_id, selection.model_id)
         try:
             healthy = await provider.health_check()
@@ -35,15 +70,7 @@ class RegisteredModelRouter:
             raise ProviderUnavailableError from exc
         if not healthy:
             raise ProviderUnavailableError
-        try:
-            output = await provider.generate(
-                GenerateRequest(model_id=selection.model_id, prompt=request.message)
-            )
-        except Exception as exc:
-            raise ExecutionFailureError from exc
-        if output.provider_id != selection.provider_id or output.model_id != selection.model_id:
-            raise ExecutionFailureError
-        return output.text
+        return provider
 
     def _resolve(self, provider_id: str, model_id: str) -> ModelProvider:
         try:

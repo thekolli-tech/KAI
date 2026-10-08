@@ -23,6 +23,23 @@ def _imported_modules(path: Path) -> set[str]:
     return modules
 
 
+def test_mock_provider_is_constructed_only_in_composition() -> None:
+    root = REPO_ROOT / "apps" / "api" / "src"
+    offenders: list[str] = []
+    for path in root.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if "MockModelProvider" in text and path.name != "composition.py":
+            offenders.append(path.name)
+    assert offenders == []
+
+
+def test_chat_transport_does_not_import_the_model_runtime() -> None:
+    root = REPO_ROOT / "apps" / "api" / "src" / "kai_api"
+    for name in ("chat.py", "sse.py"):
+        modules = _imported_modules(root / name)
+        assert all(not module.startswith("kai_model_runtime") for module in modules)
+
+
 def test_python_sources_do_not_import_hosted_model_sdks() -> None:
     offenders: list[str] = []
     for root in ROOTS:

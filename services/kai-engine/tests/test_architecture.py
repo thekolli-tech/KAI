@@ -31,6 +31,7 @@ BANNED_MODULES = (
     "kai_memory",
     "kai_search",
     "kai_documents",
+    "sse_starlette",
 )
 
 
@@ -62,5 +63,18 @@ def test_orchestrator_calls_the_router_and_not_a_provider() -> None:
     source = ORCHESTRATOR.read_text(encoding="utf-8")
     assert "self._model_router.select" in source
     assert "self._model_router.execute" in source
+    assert "self._model_router.stream" in source
     assert "MockModelProvider" not in source
     assert "GenerateRequest" not in source
+    assert "text/event-stream" not in source
+
+
+def test_engine_sources_do_not_mention_sse_or_the_mock_provider() -> None:
+    banned = ("MockModelProvider", "text/event-stream", "sse_starlette", "EventSourceResponse")
+    offenders: list[str] = []
+    for path in SRC.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        for name in banned:
+            if name in text:
+                offenders.append(f"{path.name}: {name}")
+    assert offenders == []

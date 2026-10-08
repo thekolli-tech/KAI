@@ -8,6 +8,7 @@ from kai_engine.contracts import (
     Principal,
 )
 from kai_engine.errors import EngineError, EngineErrorKind
+from kai_engine.events import RunEvent, RunEventType
 from kai_engine.interfaces import KaiEngine
 from kai_engine.orchestrator import KaiEngineOrchestrator
 
@@ -22,4 +23,6 @@ __all__ = [
     "KaiEngine",
     "KaiEngineOrchestrator",
     "Principal",
+    "RunEvent",
+    "RunEventType",
 ]

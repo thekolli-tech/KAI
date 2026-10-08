@@ -90,12 +90,16 @@ Python commands use `scripts/py`, which prefers `.venv`.
 
 ## Local model path
 
-`apps/api` builds a `ProviderRegistry` with `MockModelProvider` and passes it to `RegisteredModelRouter`. `KaiEngineOrchestrator` calls `select`, then `execute`, and passes that text to verification. Tests in `services/model-runtime/tests` and `apps/api/tests/test_model_path.py` cover the path without a network or a database.
+`apps/api` builds a `ProviderRegistry` with `MockModelProvider` and passes it to `RegisteredModelRouter`. `KaiEngineOrchestrator.handle` calls `select`, then `execute`. `handle_stream` calls `select`, then `stream`. Both pass the model text to verification. Tests in `services/model-runtime/tests` and `apps/api/tests` cover the path without a network or a database.
 
 ## Chat
 
-`POST /api/v1/chat` requires a bearer token. Outside production, `KAI_LOCAL_BEARER_TOKEN`, `KAI_LOCAL_USER_ID`, and `KAI_LOCAL_ORGANIZATION_ID` configure that token and the principal. The body is a message. The response message is the deterministic mock text. Production refuses the local token.
+`POST /api/v1/chat` and `POST /api/v1/chat/stream` require a bearer token. Outside production, `KAI_LOCAL_BEARER_TOKEN`, `KAI_LOCAL_USER_ID`, and `KAI_LOCAL_ORGANIZATION_ID` configure that token and the principal. The body is a message. The client cannot set the organization id. Production refuses the local token.
+
+The JSON route returns the deterministic mock text. The stream route is `text/event-stream` and is not cached. Events are `run.started`, `message.delta`, `message.completed`, `run.completed`, and `run.failed`. Joining the deltas produces `mock:mock-text:<message>`. `verified` comes from the current verifier, which accepts text because no verification policy exists. Authentication and validation errors stay HTTP errors. After the stream starts, failures are `run.failed` with no traceback or secret. Disconnect cancels the run and closes the mock stream.
+
+The provider remains the local mock. Health does not claim production inference.
 
 ## Next step
 
-Phase 5 adds `POST /api/v1/chat/stream` from `MockModelProvider.stream`. The mock stays the only provider.
+Connect the disabled workspace composer to `POST /api/v1/chat/stream` through a same-origin handler so the browser never receives the local bearer token. Keep `MockModelProvider` as the only provider.
