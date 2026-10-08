@@ -12,13 +12,13 @@ User
   → models, tools, memory, documents, search
 ```
 
-Phase 1 ships the web app, the API health check, and the contracts below. The arrow into the engine is a boundary, not a running pipeline.
+Phase 1 shipped the web app, the API health check, and the contracts below. Phase 2 adds the orchestrator that calls those stage protocols. The API still does not expose a chat route.
 
 The API is a modular monolith. `services/*` are Python packages imported by that process. They are not separate network services. Split them only when a boundary has its own scaling or security reason.
 
 ## Engine stages
 
-`KaiEngine.handle` is the future entry. The stages, in order, are:
+`KaiEngineOrchestrator.handle` is the entry. It is constructed with the stage protocols and calls them in this order:
 
 1. Request intake validates an `EngineRequest`.
 2. Intent detection classifies the message.
@@ -26,15 +26,56 @@ The API is a modular monolith. `services/*` are Python packages imported by that
 4. Planning produces a `TaskPlan`.
 5. Model selection chooses a provider id and model id.
 6. Tool selection chooses tool names.
-7. Agent execution delegates a step to a named agent.
+7. Agent execution delegates once to an agent.
 8. Memory retrieval returns memory ids for the caller's organization.
-9. Tool execution runs one permitted tool.
-10. Verification accepts or rejects a candidate answer.
+9. Tool execution runs each selected tool, or none when the selection is empty.
+10. Verification accepts or rejects the agent stage's text.
 11. Response composition returns an `EngineResponse`.
 
-Each stage is a `Protocol` in `services/kai-engine`. There is no default implementation. A class that raises `NotImplementedError` and still gets registered would look like a product feature, so it is not there.
+The orchestrator stores each result on an `ExecutionContext` and passes that context into the next stage. It does not classify, plan, or write the answer. There are still no product implementations of the individual stages. Tests supply doubles. A stage that raised `NotImplementedError` and was registered as a real capability would look like a product feature, so none is registered.
 
-The engine does not import a model SDK. `ModelRouter` returns a `ModelChoice` (`provider_id`, `model_id`) and normalized text. Provider code lives in `services/model-runtime`.
+`ExecutionContext` carries the request id, run id, user id, organization id, conversation id, raw input, normalized request, intent, context bundle, plan, selected model, selected tools, selected agents, memory ids, tool results, agent text, verification, and response. A field is `None` until that stage has run. An empty tuple or string means the stage ran and produced nothing.
+
+The candidate passed to verification is only the agent stage's string. It is empty when that stage returns an empty string. Tool results stay on the context. They are not rewritten into a prompt, and they are not presented as model output.
+
+### Dependency injection
+
+```python
+KaiEngineOrchestrator(
+    intake=...,
+    intent=...,
+    context=...,
+    planner=...,
+    model_router=...,
+    tool_router=...,
+    agent=...,
+    memory=...,
+    verifier=...,
+    responder=...,
+)
+```
+
+Every argument is a protocol from `kai_engine.interfaces`. The orchestrator does not construct providers, tools, or stores.
+
+### Errors
+
+A failure stops the pipeline. `EngineError` carries the kind, the stage, the request id, the run id, and the organization id. `str(error)` and `to_public_dict()` omit the causing exception, so an API can return them without a stack trace. The cause stays on `__cause__` for server logs.
+
+Kinds are `invalid_input`, `unavailable_dependency`, `stage_failure`, `provider_unavailable`, `execution_failure`, `verification_failure`, and `cancelled`. Stages raise the matching `EngineStageError` subclass. A rejected `VerificationResult` is a verification failure and does not call response composition. A tool result with `succeeded` false is an execution failure. A context bundle for another organization stops the run.
+
+### Cancellation
+
+`handle` accepts a `CancellationToken`. The orchestrator checks it before every stage and before returning a response. Cancelling the token raises `EngineError` with kind `cancelled`. `asyncio.CancelledError` is not converted into a stage failure; it propagates so the caller's task can cancel. There is no job queue.
+
+### Model boundary
+
+`ModelRouter.select` returns a `ModelChoice`. `ModelRouter.execute` is the invocation port and the orchestrator does not call it. Doing so would require a model and would look like a completed generation.
+
+`ModelProvider` in `services/model-runtime` is the runtime port (`generate`, `stream`, `get_capabilities`, `health_check`). The engine package does not import it. A future router, outside `kai_engine`, is what calls `ModelProvider`. That keeps provider SDKs and provider request shapes out of the orchestrator. `ModelProvider.stream` is unchanged. `handle` does not emit stream events.
+
+### Contract note
+
+The engine's model dependency is `ModelRouter`, which already existed, rather than a second provider protocol inside `kai_engine`. Importing `ModelProvider` from the engine would couple the orchestrator to the runtime package. Phase 3 implements a router against `ModelProvider` and only then should `handle` start calling `execute`.
 
 ## Model runtime
 
@@ -162,12 +203,12 @@ Design-system components live under `apps/web/src/components`. shadcn/ui supplie
 ```
 apps/web → packages/shared, packages/types, packages/config
 apps/api → kai_engine and the other service packages
-kai_engine → no provider, tool, or database SDK
+kai_engine → its own protocols only
 model-runtime, tools, agents, memory, search, documents → their own contracts
 ```
 
-Service packages do not import each other in Phase 1. The API, later the engine pipeline, is the composition root.
+`kai_engine` does not import the model runtime, tool, agent, memory, search, or document packages, and it does not import a web framework or a database client. The API remains the composition root. It does not construct an orchestrator yet, because there are no stage implementations to inject.
 
-## Phase 2
+## Phase 3
 
-Implement the engine pipeline behind `KaiEngine.handle` using the protocols in `kai_engine.interfaces`. Keep provider calls behind `ModelProvider`. Do not add a hosted SDK. The following phase adds `MockModelProvider` so the pipeline can return a clearly marked local response.
+Add `MockModelProvider` behind `ModelProvider`, and a `ModelRouter` implementation that calls it. Then `KaiEngineOrchestrator` can call `ModelRouter.execute` and pass that text to verification. The mock must be visibly local. It is not a hosted provider, and it does not belong in the orchestrator.

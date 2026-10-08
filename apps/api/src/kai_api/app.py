@@ -33,8 +33,8 @@ def create_app() -> FastAPI:
         version=product.version,
         summary=f"{product.product} by {product.maker}",
         description=(
-            "Phase 1 serves health checks. Chat, models, tools, and agents "
-            "are interfaces only and are not exposed yet."
+            "Health checks are exposed. The engine orchestrator is not mounted "
+            "on a chat route, and no model provider is connected."
         ),
         docs_url="/api/v1/docs",
         openapi_url="/api/v1/openapi.json",

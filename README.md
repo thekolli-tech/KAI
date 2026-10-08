@@ -1,6 +1,6 @@
 # KAI
 
-KAI by THEKOLLI is a provider-agnostic AI intelligence platform. This repository is the Phase 1 architecture: a Next.js workspace, a FastAPI modular monolith, and engine boundaries that do not call a hosted model.
+KAI by THEKOLLI is a provider-agnostic AI intelligence platform. This repository has a Next.js workspace, a FastAPI modular monolith, and a KAI Engine orchestrator that calls stage protocols. It does not call a hosted model.
 
 The model runtime is an interface. OpenAI, Anthropic, Gemini, and Perplexity are not integrated. A later phase can add a mock provider, then a self-hosted runtime, without rewriting the workspace or the engine contracts.
 
@@ -10,9 +10,10 @@ The model runtime is an interface. OpenAI, Anthropic, Gemini, and Perplexity are
 - API health checks at `GET /api/v1/health` and `GET /health`
 - Shared TypeScript contracts in `packages/`
 - Python interfaces for the engine, models, tools, agents, memory, search, and documents
+- `KaiEngineOrchestrator`, which runs those stage protocols when they are injected
 - PostgreSQL schema and Docker Compose for PostgreSQL, Redis, Qdrant, and MinIO
 
-Chat, tool execution, agents, memory, document ingestion, and authentication are not implemented. The interface does not pretend they are.
+The orchestrator is not mounted on a chat route. Chat, tool execution, agents, memory, document ingestion, and authentication do not have product implementations. The workspace does not pretend they do.
 
 ## Layout
 
@@ -49,7 +50,7 @@ cp .env.example .env
 cp apps/web/.env.example apps/web/.env.local
 ```
 
-Replace the `change-me` passwords in `.env` before starting Docker. Leave the infrastructure URLs blank unless you want the health check to report them as configured. Phase 1 still does not connect to them.
+Replace the `change-me` passwords in `.env` before starting Docker. Leave the infrastructure URLs blank unless you want the health check to report them as configured. The API does not connect to them.
 
 ## Run
 
@@ -88,4 +89,4 @@ Python commands use `scripts/py`, which prefers `.venv`.
 
 ## Next step
 
-Phase 2 wires the KAI Engine interfaces into a real intake-to-response pipeline, still without a model provider. Phase 3 adds `MockModelProvider`.
+Phase 3 adds `MockModelProvider` behind `ModelProvider`, and a router that the orchestrator can call. The mock stays out of `KaiEngineOrchestrator`.
