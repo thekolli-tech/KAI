@@ -1,0 +1,16 @@
+{
+  "product": "KAI",
+  "maker": "THEKOLLI",
+  "version": "0.1.0",
+  "phase": 1,
+  "apiVersion": "v1",
+  "ports": {
+    "api": 8000,
+    "web": 3000,
+    "postgres": 5432,
+    "redis": 6379,
+    "qdrant": 6333,
+    "minio": 9000,
+    "minioConsole": 9001
+  }
+}

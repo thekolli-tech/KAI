@@ -1,0 +1,13 @@
+{
+  "name": "kai",
+  "private": true,
+  "packageManager": "pnpm@10.33.3",
+  "scripts": {
+    "dev:web": "pnpm --filter @kai/web dev",
+    "dev:api": "scripts/py -m uvicorn kai_api.main:app --host 0.0.0.0 --port 8000 --reload",
+    "lint": "pnpm --filter @kai/web lint && scripts/py -m ruff check . && scripts/py -m ruff format --check .",
+    "typecheck": "pnpm -r --if-present typecheck && scripts/py -m mypy",
+    "test": "pnpm -r --if-present test && scripts/py -m pytest",
+    "build": "pnpm --filter @kai/web build"
+  }
+}

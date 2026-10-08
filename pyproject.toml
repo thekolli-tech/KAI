@@ -1,0 +1,107 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kai"
+version = "0.1.0"
+description = "KAI by THEKOLLI. Provider-agnostic AI intelligence platform."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.6",
+  "pydantic>=2.10.0",
+  "pydantic-settings>=2.7.0",
+  "uvicorn>=0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28.0",
+  "mypy>=1.14.0",
+  "pytest>=8.3.0",
+  "ruff>=0.9.0",
+]
+
+[tool.setuptools]
+packages = [
+  "kai_api",
+  "kai_api.security",
+  "kai_engine",
+  "kai_model_runtime",
+  "kai_agents",
+  "kai_tools",
+  "kai_memory",
+  "kai_search",
+  "kai_documents",
+]
+
+[tool.setuptools.package-dir]
+kai_api = "apps/api/src/kai_api"
+kai_engine = "services/kai-engine/src/kai_engine"
+kai_model_runtime = "services/model-runtime/src/kai_model_runtime"
+kai_agents = "services/agents/src/kai_agents"
+kai_tools = "services/tools/src/kai_tools"
+kai_memory = "services/memory/src/kai_memory"
+kai_search = "services/search/src/kai_search"
+kai_documents = "services/documents/src/kai_documents"
+
+[tool.pytest.ini_options]
+testpaths = ["apps/api/tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = [
+  "apps/api/src",
+  "apps/api/tests",
+  "services/kai-engine/src",
+  "services/model-runtime/src",
+  "services/agents/src",
+  "services/tools/src",
+  "services/memory/src",
+  "services/search/src",
+  "services/documents/src",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+  "kai_api",
+  "kai_engine",
+  "kai_model_runtime",
+  "kai_agents",
+  "kai_tools",
+  "kai_memory",
+  "kai_search",
+  "kai_documents",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+namespace_packages = false
+mypy_path = [
+  "apps/api/src",
+  "services/kai-engine/src",
+  "services/model-runtime/src",
+  "services/agents/src",
+  "services/tools/src",
+  "services/memory/src",
+  "services/search/src",
+  "services/documents/src",
+]
+packages = [
+  "kai_api",
+  "kai_engine",
+  "kai_model_runtime",
+  "kai_agents",
+  "kai_tools",
+  "kai_memory",
+  "kai_search",
+  "kai_documents",
+]
