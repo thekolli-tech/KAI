@@ -54,7 +54,7 @@ function ReadyStatus({ report }: { report: HealthReport }) {
       <AgentStatus
         name="KAI Engine"
         state="idle"
-        detail="The orchestrator is not mounted on a chat route."
+        detail="Chat streams through the local mock. This is not a production model."
       />
       <dl className="grid gap-2 sm:grid-cols-2">
         {checkEntries(report).map(({ key, state }) => (

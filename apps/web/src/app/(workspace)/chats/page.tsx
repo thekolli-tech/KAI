@@ -1,6 +1,5 @@
-import { ReservedSurface } from "@/components/layout/reserved-surface";
-import { surfaces } from "@/lib/surfaces";
+import { ConversationList } from "@/components/chat/conversation-list";
 
 export default function ChatsPage() {
-  return <ReservedSurface {...surfaces.chats} />;
+  return <ConversationList />;
 }

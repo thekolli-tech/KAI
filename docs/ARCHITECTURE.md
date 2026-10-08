@@ -12,7 +12,7 @@ User
   → models, tools, memory, documents, search
 ```
 
-Phase 1 shipped the web app, the API health check, and the contracts below. Phase 2 adds the orchestrator. Phase 3 registers a local mock model. Phase 4 exposes that path at `POST /api/v1/chat`. The workspace composer still does not send messages.
+Phase 1 shipped the web app, the API health check, and the contracts below. Phase 2 adds the orchestrator. Phase 3 registers a local mock model. Phase 4 exposes that path at `POST /api/v1/chat`. Phase 5 streams it. The workspace composer calls that stream through a same-origin handler.
 
 The API is a modular monolith. `services/*` are Python packages imported by that process. They are not separate network services. Split them only when a boundary has its own scaling or security reason.
 
@@ -209,9 +209,9 @@ The schema is `infrastructure/postgres/migrations/001_initial.sql`. The API does
 
 ## Web workspace
 
-The workspace is a dark graphite surface with champagne gold and silver. It shows the brand, reserved quick actions, a disabled composer, and the live health check.
+The workspace is a dark graphite surface with champagne gold and silver. It shows the brand, reserved quick actions, the composer, and the live health check.
 
-Quick actions are disabled. The composer does not submit. Chats, projects, knowledge, agents, and tools render empty states that say those capabilities are not running. Settings does not save an account.
+Quick actions are disabled. The composer submits to the same-origin stream. Projects, knowledge, agents, and tools render empty states that say those capabilities are not running. Settings does not save an account. The assistant label is Local Mock Provider. KAI currently uses `MockModelProvider`. It is not a production model.
 
 Design-system components live under `apps/web/src/components`. shadcn/ui supplies button, input, dialog, and dropdown primitives. Product components wrap those primitives where the product name differs (modal, dropdown).
 
@@ -228,8 +228,14 @@ model-runtime → its own provider, mock, and registry contracts
 
 ## Streaming
 
-`POST /api/v1/chat/stream` is the streaming chat route. The path is HTTP, then the API composition root, then `KaiEngineOrchestrator.handle_stream`, then `RegisteredModelRouter.stream`, then `ModelProvider.stream`, then `MockModelProvider.stream`. The route does not construct a provider. `kai_engine` does not import `MockModelProvider`.
+`POST /api/v1/chat/stream` is the streaming chat route. The path is the workspace, then the same-origin handler, then authentication and the organization boundary, then `KaiEngineOrchestrator.handle_stream`, then `RegisteredModelRouter.stream`, then `ModelProvider.stream`, then `MockModelProvider.stream`, then SSE back to the browser. The route does not construct a provider. `kai_engine` does not import `MockModelProvider`. The web app does not import the provider, the registry, or the engine.
+
+Public events are `run.started`, `message.delta`, `message.completed`, `run.completed`, and `run.failed`. Each one carries `request_id`, `run_id`, and `organization_id`. The browser appends `message.delta` as it arrives. `verified` is still the accepting verifier's result. A `run.failed` event shows the public message. Stack traces, paths, and secrets are not shown.
+
+The same-origin handler reads `KAI_LOCAL_BEARER_TOKEN` and `KAI_API_ORIGIN`. Those values are not `NEXT_PUBLIC_` settings. Stop generation aborts the browser fetch. The API sees the disconnect, cancels the `CancellationToken`, and closes the provider stream. Cancellation is not an HTTP 500.
+
+`POST /api/conversations` creates a server-generated conversation id in the workspace process. The transcript can be listed and loaded until that process stops. It is not the PostgreSQL schema. The API still does not open a database connection.
 
 ## Next step
 
-Connect the disabled workspace composer to `POST /api/v1/chat/stream` through a same-origin handler so the browser never receives the local bearer token. Keep `MockModelProvider` as the only provider. Do not add a hosted model.
+Persist conversations and messages in PostgreSQL through the existing schema and organization boundary. Keep `MockModelProvider` as the only provider. Do not add a hosted model.
