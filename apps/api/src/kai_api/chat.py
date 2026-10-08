@@ -13,10 +13,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from starlette.requests import ClientDisconnect
 
 from kai_api.access import AuthenticationFailed
+from kai_api.persistence import ConversationNotFound, ConversationStore, PersistenceUnavailable
 from kai_api.security.contracts import RequestCredentials
 from kai_api.sse import encode_run_event
 from kai_engine.context import CancellationToken
-from kai_engine.contracts import EngineRequest, EngineResponse
+from kai_engine.contracts import EngineRequest, EngineResponse, Principal
 from kai_engine.errors import EngineError, EngineErrorKind
 from kai_engine.events import RunEvent, RunEventType
 
@@ -73,8 +74,12 @@ def install_chat(router: APIRouter) -> None:
 
 async def post_chat(body: ChatRequest, request: Request) -> EngineResponse:
     engine_request = await _accepted_request(body, request)
-    response = await request.app.state.engine.handle(engine_request)
-    return cast(EngineResponse, response)
+    await _persist_user_message(request, engine_request)
+    response = cast(EngineResponse, await request.app.state.engine.handle(engine_request))
+    saved = await _persist_assistant_message(request, engine_request, response.message)
+    if not saved:
+        raise ConversationNotFound
+    return response
 
 
 async def post_chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
@@ -93,6 +98,7 @@ async def post_chat_stream(body: ChatRequest, request: Request) -> StreamingResp
     """
 
     engine_request = await _accepted_request(body, request)
+    await _persist_user_message(request, engine_request)
     token = CancellationToken()
     run_id = uuid4()
     frames = _sse_frames(request, engine_request, token, run_id)
@@ -120,6 +126,26 @@ def install_error_handlers(app: FastAPI) -> None:
         message = "The organization boundary refused the request."
         return JSONResponse(status_code=403, content={"message": message})
 
+    @app.exception_handler(ConversationNotFound)
+    async def conversation_not_found(
+        _request: Request,
+        _exc: ConversationNotFound,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content={"message": "That conversation is not available."},
+        )
+
+    @app.exception_handler(PersistenceUnavailable)
+    async def persistence_unavailable(
+        _request: Request,
+        _exc: PersistenceUnavailable,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=503,
+            content={"message": "A required dependency is unavailable."},
+        )
+
     @app.exception_handler(Exception)
     async def unhandled(_request: Request, exc: Exception) -> JSONResponse:
         logger.exception("Unhandled API failure", exc_info=exc)
@@ -129,16 +155,21 @@ def install_error_handlers(app: FastAPI) -> None:
         )
 
 
-async def _accepted_request(body: ChatRequest, request: Request) -> EngineRequest:
+async def principal_from_request(request: Request, *, action: str) -> Principal:
     credentials = _credentials(request.headers.get("authorization"))
     principal = await request.app.state.authenticator.authenticate(credentials)
     decision = await request.app.state.authorizer.authorize(
         principal,
-        action="chat",
+        action=action,
         organization_id=principal.organization_id,
     )
     if not decision.allowed:
         raise AuthorizationRefused
+    return cast(Principal, principal)
+
+
+async def _accepted_request(body: ChatRequest, request: Request) -> EngineRequest:
+    principal = await principal_from_request(request, action="chat")
     header_request_id = getattr(request.state, "request_id", "")
     return EngineRequest(
         request_id=_engine_request_id(str(header_request_id)),
@@ -187,6 +218,15 @@ async def _sse_frames(
             pull = None
             if kind == "done" or event is None:
                 break
+            if event.type is RunEventType.COMPLETED:
+                saved = await _persist_assistant_message(
+                    request,
+                    engine_request,
+                    event.message or "",
+                )
+                if not saved:
+                    yield encode_run_event(_generic_failure(engine_request, run_id))
+                    break
             yield encode_run_event(event)
     except asyncio.CancelledError:
         token.cancel()
@@ -240,6 +280,39 @@ async def _stop(task: asyncio.Task[object]) -> None:
         task.cancel()
     with contextlib.suppress(Exception, asyncio.CancelledError):
         await task
+
+
+async def _persist_user_message(request: Request, engine_request: EngineRequest) -> None:
+    conversation_id = engine_request.conversation_id
+    if conversation_id is None:
+        return
+    store = _conversation_store(request)
+    saved = await store.append_user(
+        engine_request.principal,
+        conversation_id,
+        engine_request.message,
+    )
+    if not saved:
+        raise ConversationNotFound
+
+
+async def _persist_assistant_message(
+    request: Request,
+    engine_request: EngineRequest,
+    content: str,
+) -> bool:
+    conversation_id = engine_request.conversation_id
+    if conversation_id is None:
+        return True
+    store = _conversation_store(request)
+    return await store.append_assistant(engine_request.principal, conversation_id, content)
+
+
+def _conversation_store(request: Request) -> ConversationStore:
+    store = getattr(request.app.state, "conversations", None)
+    if not isinstance(store, ConversationStore):
+        raise PersistenceUnavailable
+    return store
 
 
 def _generic_failure(engine_request: EngineRequest, run_id: UUID) -> RunEvent:

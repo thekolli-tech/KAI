@@ -4,6 +4,9 @@
 
 services:
   postgres:
+    # Conversation tests use database kai_test and role kai. After this service
+    # is healthy, run infrastructure/postgres/bootstrap_test_db.py.
+    # POSTGRES_PASSWORD must be kai-local-password for the default test URL.
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-kai}
@@ -13,6 +16,7 @@ services:
       - "5432:5432"
     volumes:
       - kai_postgres:/var/lib/postgresql/data
+      - ./infrastructure/postgres/migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s

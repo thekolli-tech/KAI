@@ -1,5 +1,6 @@
--- KAI phase 1 schema.
--- The API does not connect to PostgreSQL yet. Apply this file when persistence starts.
+-- KAI schema.
+-- Apply this file before starting the API with DATABASE_URL set.
+-- Tenant queries run as kai_app. The connection user must be able to SET ROLE kai_app.
 --
 -- Tenancy: the application role is kai_app, not the database owner and not a superuser.
 -- Before a request touches tenant data, the server sets:

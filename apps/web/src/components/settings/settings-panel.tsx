@@ -41,7 +41,7 @@ export function SettingsPanel() {
           <li>The web workspace and the API health check are running.</li>
           <li>The composer streams from the local mock runtime. It is not a production model.</li>
           <li>The browser does not receive the local bearer token.</li>
-          <li>Transcripts stay in this workspace process. They are not written to the database.</li>
+          <li>Transcripts are saved for the authenticated organization. The browser does not choose that organization.</li>
           <li>Tools, agents, memory, and documents are not running.</li>
           <li>No hosted model provider is connected.</li>
         </ul>

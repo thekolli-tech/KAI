@@ -12,7 +12,7 @@ User
   → models, tools, memory, documents, search
 ```
 
-Phase 1 shipped the web app, the API health check, and the contracts below. Phase 2 adds the orchestrator. Phase 3 registers a local mock model. Phase 4 exposes that path at `POST /api/v1/chat`. Phase 5 streams it. The workspace composer calls that stream through a same-origin handler.
+Phase 1 shipped the web app, the API health check, and the contracts below. Phase 2 adds the orchestrator. Phase 3 registers a local mock model. Phase 4 exposes that path at `POST /api/v1/chat`. Phase 5 streams it. The workspace composer calls that stream through a same-origin handler. Conversations and messages are stored in PostgreSQL for the authenticated organization.
 
 The API is a modular monolith. `services/*` are Python packages imported by that process. They are not separate network services. Split them only when a boundary has its own scaling or security reason.
 
@@ -205,7 +205,7 @@ The schema uses UUIDs. Tenant tables carry `organization_id`. Child rows use com
 
 Row level security is forced. The application role is `kai_app`. It must not be a superuser, because superusers bypass row level security. Before queries run, the server sets `kai.organization_id` and `kai.user_id` from the authenticated membership.
 
-The schema is `infrastructure/postgres/migrations/001_initial.sql`. The API does not open a database connection yet, so a missing database does not look healthy. An empty URL is `not_configured`. A set URL is `configured_unchecked`.
+The schema is `infrastructure/postgres/migrations/001_initial.sql`. Conversation routes open `DATABASE_URL` when it is set. Health does not probe the database: an empty URL is `not_configured`, and a set URL stays `configured_unchecked`.
 
 ## Web workspace
 
@@ -234,8 +234,10 @@ Public events are `run.started`, `message.delta`, `message.completed`, `run.comp
 
 The same-origin handler reads `KAI_LOCAL_BEARER_TOKEN` and `KAI_API_ORIGIN`. Those values are not `NEXT_PUBLIC_` settings. Stop generation aborts the browser fetch. The API sees the disconnect, cancels the `CancellationToken`, and closes the provider stream. Cancellation is not an HTTP 500.
 
-`POST /api/conversations` creates a server-generated conversation id in the workspace process. The transcript can be listed and loaded until that process stops. It is not the PostgreSQL schema. The API still does not open a database connection.
+`POST /api/v1/conversations` creates the conversation id. The organization id comes from the authenticated principal. A request body cannot choose it. Reads and writes run as `kai_app` with `kai.organization_id` and `kai.user_id` set for that principal, so row level security hides other organizations. A conversation the principal cannot see is not found.
+
+The user message is stored before the model runs. `message.delta` events are not stored. One assistant row is stored when `run.completed` arrives, using the completed text. `run.failed` and a disconnect do not store a completed assistant message. The workspace lists and reloads those rows from PostgreSQL, including after the Next.js process restarts. `MockModelProvider` remains the only provider.
 
 ## Next step
 
-Persist conversations and messages in PostgreSQL through the existing schema and organization boundary. Keep `MockModelProvider` as the only provider. Do not add a hosted model.
+The local development credential is still not a production identity system. Keep `MockModelProvider` as the only provider. Do not add a hosted model.

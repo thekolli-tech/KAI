@@ -9,8 +9,10 @@ from kai_api.access import BoundaryAuthorizer, LocalDevelopmentAuthenticator
 from kai_api.chat import install_chat, install_error_handlers
 from kai_api.composition import build_engine, build_model_router
 from kai_api.config import get_settings
+from kai_api.conversations import install_conversations
 from kai_api.health import HealthResponse, build_health
 from kai_api.middleware import RequestIdMiddleware
+from kai_api.persistence import open_store
 from kai_api.product import get_product_config
 from kai_engine.interfaces import VerificationEngine
 from kai_model_runtime import ModelProvider
@@ -18,6 +20,7 @@ from kai_model_runtime import ModelProvider
 api_router = APIRouter()
 probe_router = APIRouter()
 install_chat(api_router)
+install_conversations(api_router)
 
 
 @api_router.get("/health", response_model=HealthResponse)
@@ -43,8 +46,9 @@ def create_app(
         version=product.version,
         summary=f"{product.product} by {product.maker}",
         description=(
-            "Health checks, POST /api/v1/chat, and POST /api/v1/chat/stream are "
-            "exposed. Chat uses the local mock model. It is not a hosted provider."
+            "Health checks, conversations, POST /api/v1/chat, and "
+            "POST /api/v1/chat/stream are exposed. Chat uses the local mock "
+            "model. It is not a hosted provider."
         ),
         docs_url="/api/v1/docs",
         openapi_url="/api/v1/openapi.json",
@@ -62,6 +66,7 @@ def create_app(
     app.state.engine = build_engine(router, verifier=verifier)
     app.state.authenticator = LocalDevelopmentAuthenticator(settings)
     app.state.authorizer = BoundaryAuthorizer()
+    app.state.conversations = open_store(settings.database_url)
     install_error_handlers(app)
     app.add_middleware(RequestIdMiddleware)
     app.include_router(api_router, prefix="/api/v1")
